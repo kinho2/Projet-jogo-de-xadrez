@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using tabuleiro;
-
 
 namespace xadrez
 {
     class PartidaDeXadrez
     {
+
         public Tabuleiro tab { get; private set; }
         public int turno { get; private set; }
         public Cor jogadorAtual { get; private set; }
@@ -16,7 +15,6 @@ namespace xadrez
         public bool xeque { get; private set; }
         public Peca vulneravelEnPassant { get; private set; }
 
-
         public PartidaDeXadrez()
         {
             tab = new Tabuleiro(8, 8);
@@ -24,10 +22,12 @@ namespace xadrez
             jogadorAtual = Cor.Branca;
             terminada = false;
             xeque = false;
+            vulneravelEnPassant = null;
             pecas = new HashSet<Peca>();
             capturadas = new HashSet<Peca>();
             colocarPecas();
         }
+
         public Peca executaMovimento(Posicao origem, Posicao destino)
         {
             Peca p = tab.retirarPeca(origem);
@@ -38,6 +38,7 @@ namespace xadrez
             {
                 capturadas.Add(pecaCapturada);
             }
+
             // #jogadaespecial roque pequeno
             if (p is Rei && destino.coluna == origem.coluna + 2)
             {
@@ -134,12 +135,29 @@ namespace xadrez
         public void realizaJogada(Posicao origem, Posicao destino)
         {
             Peca pecaCapturada = executaMovimento(origem, destino);
+
             if (estaEmXeque(jogadorAtual))
             {
                 desfazMovimento(origem, destino, pecaCapturada);
                 throw new TabuleiroException("Você não pode se colocar em xeque!");
             }
-            if (estaEmXeque(advesaria(jogadorAtual)))
+
+            Peca p = tab.peca(destino);
+
+            // #jogadaespecial promocao
+            if (p is Peao)
+            {
+                if ((p.cor == Cor.Branca && destino.linha == 0) || (p.cor == Cor.Preta && destino.linha == 7))
+                {
+                    p = tab.retirarPeca(destino);
+                    pecas.Remove(p);
+                    Peca dama = new Dama(tab, p.cor);
+                    tab.colocarPeca(dama, destino);
+                    pecas.Add(dama);
+                }
+            }
+
+            if (estaEmXeque(adversaria(jogadorAtual)))
             {
                 xeque = true;
             }
@@ -147,16 +165,29 @@ namespace xadrez
             {
                 xeque = false;
             }
-            if (testeXequeMate(advesaria(jogadorAtual)))
+
+            if (testeXequemate(adversaria(jogadorAtual)))
             {
                 terminada = true;
             }
             else
-            { 
-            turno++;
-            mudaJogador();
+            {
+                turno++;
+                mudaJogador();
             }
+
+            // #jogadaespecial en passant
+            if (p is Peao && (destino.linha == origem.linha - 2 || destino.linha == origem.linha + 2))
+            {
+                vulneravelEnPassant = p;
+            }
+            else
+            {
+                vulneravelEnPassant = null;
+            }
+
         }
+
         public void validarPosicaoDeOrigem(Posicao pos)
         {
             if (tab.peca(pos) == null)
@@ -169,9 +200,10 @@ namespace xadrez
             }
             if (!tab.peca(pos).existeMovimentoPossiveis())
             {
-                throw new TabuleiroException("Não há movimentos possíveis para a peça de origem esconhida!");
+                throw new TabuleiroException("Não há movimentos possíveis para a peça de origem escolhida!");
             }
         }
+
         public void validarPosicaoDeDestino(Posicao origem, Posicao destino)
         {
             if (!tab.peca(origem).movimentoPossivel(destino))
@@ -191,10 +223,11 @@ namespace xadrez
                 jogadorAtual = Cor.Branca;
             }
         }
+
         public HashSet<Peca> pecasCapturadas(Cor cor)
         {
             HashSet<Peca> aux = new HashSet<Peca>();
-            foreach(Peca x in capturadas)
+            foreach (Peca x in capturadas)
             {
                 if (x.cor == cor)
                 {
@@ -217,9 +250,11 @@ namespace xadrez
             aux.ExceptWith(pecasCapturadas(cor));
             return aux;
         }
-        private Cor advesaria(Cor cor)
+
+        private Cor adversaria(Cor cor)
         {
-            if (cor == Cor.Branca) { 
+            if (cor == Cor.Branca)
+            {
                 return Cor.Preta;
             }
             else
@@ -227,7 +262,8 @@ namespace xadrez
                 return Cor.Branca;
             }
         }
-        private Peca rei (Cor cor)
+
+        private Peca rei(Cor cor)
         {
             foreach (Peca x in pecasEmJogo(cor))
             {
@@ -238,6 +274,7 @@ namespace xadrez
             }
             return null;
         }
+
         public bool estaEmXeque(Cor cor)
         {
             Peca R = rei(cor);
@@ -245,7 +282,7 @@ namespace xadrez
             {
                 throw new TabuleiroException("Não tem rei da cor " + cor + " no tabuleiro!");
             }
-            foreach (Peca x in pecasEmJogo(advesaria(cor)))
+            foreach (Peca x in pecasEmJogo(adversaria(cor)))
             {
                 bool[,] mat = x.movimentosPossiveis();
                 if (mat[R.posicao.linha, R.posicao.coluna])
@@ -255,18 +292,19 @@ namespace xadrez
             }
             return false;
         }
-        public bool testeXequeMate( Cor cor)
+
+        public bool testeXequemate(Cor cor)
         {
             if (!estaEmXeque(cor))
             {
                 return false;
             }
-            foreach(Peca x in pecasEmJogo(cor))
+            foreach (Peca x in pecasEmJogo(cor))
             {
                 bool[,] mat = x.movimentosPossiveis();
-                for( int i=0; i<tab.linhas; i++)
+                for (int i = 0; i < tab.linhas; i++)
                 {
-                    for (int j=0; j<tab.colunas; j++)
+                    for (int j = 0; j < tab.colunas; j++)
                     {
                         if (mat[i, j])
                         {
